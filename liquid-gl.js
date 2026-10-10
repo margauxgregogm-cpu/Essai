@@ -12,75 +12,60 @@ float h2(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7))+uSeed)*43758.5453);}
 float n2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
   return mix(mix(h2(i),h2(i+vec2(1,0)),f.x),mix(h2(i+vec2(0,1)),h2(i+vec2(1,1)),f.x),f.y);}
 float fbm(vec2 p){return .5*n2(p)+.25*n2(p*2.03+7.)+.125*n2(p*4.1+13.);}
-/* bord bas : (y, dy/dx) */
+/* houle : y(x) et pente, plusieurs vagues superposées qui avancent avec e */
+vec2 swell(float x,float ph,float A){
+  float k1=.0105,k2=.0270,k3=.0046;
+  float y=A*(.55*sin(x*k1+ph*7.)+.3*sin(x*k2-ph*5.+1.3)+.75*sin(x*k3+2.+ph*3.));
+  float s=A*(.55*k1*cos(x*k1+ph*7.)+.3*k2*cos(x*k2-ph*5.+1.3)+.75*k3*cos(x*k3+2.+ph*3.));
+  return vec2(y,s);
+}
 vec2 botEdge(float x){
-  float e=uBot,Dm=uRes.y*.45;
-  float sheet=mix(-14.,uRes.y+14.,pow(e,1.5));
-  sheet+=5.*sin(x*.021+e*5.)*sin(3.14159*e);
-  float best=0.,slope=0.;
-  for(int i=0;i<ND;i++){
-    vec4 d=uDB[i];float w=d.y*uRes.x,q=(x-d.x*uRes.x)/w;
-    if(abs(q)<.999){
-      float r=smoothstep(d.w,d.w+.5,e),s=1.-q*q,v=Dm*d.z*r*pow(s,.6);
-      if(v>best){best=v;slope=-Dm*d.z*r*.6*pow(s,-.4)*2.*q/w;}
-    }
-  }
-  return vec2(sheet+best,clamp(slope,-8.,8.));
+  float A=uRes.y*.075;vec2 w=swell(x,uBot,A);
+  return vec2(mix(-2.*A-14.,uRes.y+2.*A+14.,uBot)+w.x,w.y);
 }
-/* bord haut : la nappe glisse en laissant des traînées */
 vec2 topEdge(float x){
-  float e=uTop,H=uRes.y;
-  float base=mix(-14.,H+14.,pow(e,1.2));
-  float k=pow(sin(3.14159*e),.8),best=0.,slope=0.;
-  for(int i=0;i<ND;i++){
-    vec4 d=uDT[i];float w=d.y*uRes.x,q=(x-d.x*uRes.x)/w;
-    if(abs(q)<.999){
-      float s=1.-q*q,v=H*.38*d.z*k*pow(s,.6);
-      if(v>best){best=v;slope=-H*.38*d.z*k*.6*pow(s,-.4)*2.*q/w;}
-    }
-  }
-  return vec2(base-best,clamp(-slope,-8.,8.));
+  float A=uRes.y*.06;vec2 w=swell(x,uTop+1.7,A);
+  return vec2(mix(-2.*A-14.,uRes.y+2.*A+14.,uTop)+w.x,w.y);
 }
-/* distance approchée au bord (px) : >0 dans le liquide */
+/* distance approchée au bord (px) : >0 dans l'eau */
 float dist(vec2 p){
   vec2 b=botEdge(p.x);float d=(b.x-p.y)/sqrt(1.+b.y*b.y);
   if(uTop>.001){vec2 t=topEdge(p.x);d=min(d,(p.y-t.x)/sqrt(1.+t.y*t.y));}
   return d;
 }
-float R_;
-float height(vec2 p){
-  float d=dist(p),t=clamp(d/R_,0.,1.);
-  return R_*sqrt(1.-(1.-t)*(1.-t))+(fbm(p*.012+uSeed)-.5)*5.*t;
+float ripple(vec2 p){
+  return fbm(vec2(p.x*.025,p.y*.05)+vec2(uBot*3.,-uTop*3.))+.5*n2(p*.09+vec2(uBot*6.,uTop*4.));
 }
 void main(){
   vec2 p=vec2(gl_FragCoord.x,uRes.y*uDPR-gl_FragCoord.y)/uDPR;
-  R_=clamp(uRes.y*.07,10.,30.);
   float d=dist(p);
-  float a=clamp(d+.5,0.,1.);
   vec4 outc=vec4(0.);
   if(d>-1.){
-    float e=1.5,h0=height(p),hx=height(p+vec2(e,0.)),hy=height(p+vec2(0.,e));
-    vec3 n=normalize(vec3(-(hx-h0)/e*1.1,-(hy-h0)/e*1.1,1.));
-    float t=clamp(d/R_,0.,1.);
-    float flow=fbm(vec2(p.x*.008,p.y*.004-uBot*2.+uTop*2.)+3.);
-    vec3 col=mix(uA,uB,.3+.7*smoothstep(0.,1.,t));
-    col*=.9+.2*flow;
-    vec3 L=normalize(vec3(-.5,-.7,.8)),V=vec3(0.,0.,1.),Hh=normalize(L+V);
-    float diff=dot(n,L)*.5+.5;
-    col*=.62+.6*diff;
-    float spec=pow(max(dot(n,Hh),0.),110.)*1.5+pow(max(dot(n,Hh),0.),16.)*.16;
-    float fr=pow(1.-n.z,2.2);
-    vec3 r=vec3(2.*n.z*n.x,2.*n.z*n.y,2.*n.z*n.z-1.);
-    float box=smoothstep(.6,.3,length(r.xy-vec2(-.5,-.55)));
-    float env=box*.5+.25*smoothstep(-.3,1.,-r.y);
-    col+=env*(.15+.7*fr)+spec+fr*.18*uA;
-    col=mix(col,uB*.55,smoothstep(.35,0.,t)*.0);
-    float al=a*mix(.78,1.,smoothstep(0.,.5,t));
+    float a=clamp(d+.5,0.,1.);
+    float e=1.2,r0=ripple(p),rx=ripple(p+vec2(e,0.)),ry=ripple(p+vec2(0.,e));
+    float depth=smoothstep(0.,uRes.y*.45,d);
+    vec3 n=normalize(vec3(-(rx-r0)/e*.9,-(ry-r0)/e*.9,1.));
+    vec3 col=mix(uA,uB,.25+.75*depth);
+    vec3 L=normalize(vec3(-.4,-.7,.6)),V=vec3(0.,0.,1.),Hh=normalize(L+V);
+    col*=.85+.3*(dot(n,L)*.5+.5);
+    float spec=pow(max(dot(n,Hh),0.),70.)*1.1;
+    float fr=pow(1.-n.z,2.);
+    col+=spec+fr*.25;
+    /* caustiques douces */
+    col+=.07*smoothstep(.55,.9,n2(p*.045+vec2(uBot*4.,uTop*3.)))*(1.-depth);
+    /* écume : bande claire et bulleuse le long du bord */
+    float bub=n2(p*.35+uBot*2.)*.6+n2(p*.9)*.4;
+    float foam=smoothstep(26.,2.,d)*smoothstep(.28,.62,bub+(1.-smoothstep(0.,26.,d))*.35);
+    foam+=smoothstep(3.,0.,abs(d-34.-12.*sin(p.x*.02)))*.35*(1.-depth)*step(.001,uBot)*smoothstep(0.,.3,uBot);
+    vec3 fc=mix(vec3(1.),uA,.12);
+    col=mix(col,fc,clamp(foam,0.,1.));
+    float al=a*mix(.7,1.,smoothstep(0.,45.,d));
+    al=mix(al,a,clamp(foam,0.,1.));
     outc=vec4(col*al,al);
   }
-  float ds=dist(p-vec2(0.,9.));
-  float sh=.32*smoothstep(-12.,5.,ds)*(1.-outc.a);
-  outc.a+=sh;
+  /* sable mouillé autour du bord */
+  float wet=.2*smoothstep(-40.,0.,d)*(1.-outc.a);
+  outc.a+=wet;
   gl_FragColor=outc;
 }`;
   const mul = a => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
