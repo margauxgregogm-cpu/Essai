@@ -32,14 +32,7 @@ h1{font:italic 400 clamp(60px,8.5vw,120px)/1 Georgia,serif;margin:14px 0}
 .fake .b{font:italic 29px Georgia,serif;margin-top:8px}
 .fake .r{display:flex;justify-content:space-between;align-items:end}
 .fake i{display:inline-block;width:19px;height:19px;border:1px solid currentColor;border-radius:50%;margin-left:7px}
-#liquid{position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:22px;
-  background:
-    linear-gradient(180deg,#fff5 0,transparent 30%,#0003 100%),
-    linear-gradient(100deg,var(--liquid) 0,var(--light) 38%,var(--liquid) 62%,var(--light) 100%);
-  clip-path:path("M0 0Z");will-change:clip-path;overflow:hidden;
-  box-shadow:inset 0 0 40px #fff6}
-#liquid .sheen{position:absolute;top:-10%;bottom:-10%;width:18%;left:var(--sx,0%);
-  background:linear-gradient(90deg,transparent,#fffa,transparent);filter:blur(6px);transform:skewX(-14deg)}
+#liquid{position:absolute;inset:0;width:100%;height:100%;z-index:4;pointer-events:none;border-radius:22px}
 @media(max-width:700px){
   #content{flex-direction:column;gap:22px;padding:84px 5% 100px}
   .copy{width:100%;height:150px;text-align:center}
